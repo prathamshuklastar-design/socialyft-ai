@@ -1,13 +1,15 @@
 export default function Home() {
   return (
-    <>
-      <style>{`
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { background:#080808; }
-      `}</style>
-      <script dangerouslySetInnerHTML={{__html: `
-        window.location.replace('/index.html');
-      `}} />
-    </>
+    <iframe
+      src="/index.html"
+      style={{
+        position:'fixed',
+        top:0,
+        left:0,
+        width:'100vw',
+        height:'100vh',
+        border:'none'
+      }}
+    />
   )
 }
