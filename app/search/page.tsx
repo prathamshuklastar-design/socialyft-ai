@@ -131,12 +131,62 @@ export default function Search() {
         '\n\nAt the end of your response, add a section called "FOLLOWUP_QUESTIONS:" with exactly 3 short follow-up questions the user might want to ask next, each on a new line starting with "- ".'
 
       const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: fullQuery })
-      })
-      const data = await res.json()
-      const raw = data.result || 'No results found.'
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ query: fullQuery })
+})
+
+if (!res.ok) throw new Error('Search failed')
+
+const reader = res.body!.getReader()
+const decoder = new TextDecoder()
+let raw = ''
+const assistantMsgId = (Date.now() + 1).toString()
+
+// Add empty assistant message first
+const emptyMsg: Message = {
+  id: assistantMsgId,
+  role: 'assistant',
+  content: '',
+  mode: activeMode,
+  followups: [],
+  timestamp: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+}
+
+const chatsWithEmpty = updatedChats.map(c =>
+  c.id === currentChatId ? { ...c, messages: [...c.messages, emptyMsg] } : c
+)
+setChats(chatsWithEmpty)
+setLoading(false)
+
+// Stream chunks
+while (true) {
+  const { done, value } = await reader.read()
+  if (done) break
+
+  const chunk = decoder.decode(value)
+  const lines = chunk.split('\n')
+
+  for (const line of lines) {
+    if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+      try {
+        const json = JSON.parse(line.slice(6))
+        if (json.text) {
+          raw += json.text
+          // Update message in real time
+          setChats(prev => prev.map(c =>
+            c.id === currentChatId ? {
+              ...c,
+              messages: c.messages.map(m =>
+                m.id === assistantMsgId ? { ...m, content: raw } : m
+              )
+            } : c
+          ))
+        }
+      } catch {}
+    }
+  }
+}
 
       let mainContent = raw
       let followups: string[] = []
@@ -165,8 +215,6 @@ export default function Search() {
       setChats(finalChats)
       localStorage.setItem('sai_chats', JSON.stringify(finalChats))
       setLoading(false)
-      typewriterEffect(assistantMsg.id, mainContent)
-
     } catch {
       const errMsg: Message = {
         id: (Date.now() + 1).toString(),
